@@ -1,0 +1,536 @@
+---
+title: "PEG Africa Case Study Submission by Marvin Adjei Kojo Lomo"
+author: "Marvin Adjei Kojo Lomo"
+date: "3/25/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+# Case Study 1: PEG Africa - Repayment
+
+## Scenario 
+
+PEG Africa's main clients are consumers who lack both access to reliable electricity and any formal banking services (a.k.a the unbanked). The firm offers a sustainable option to meet residential electricity needs via the Solar Home System (three lights, phone and a radio) to consumers (living on $5 - $10). Consumers can build their credit for additional products and services over time.
+
+
+## Ghana Company Profile
+
+1. 35 Service Centers spread into 7 regions. 
+2. Region is managed by an ASM covering about 5 Service Centers.
+3. Each Service Center has 4 - 6 DSR managed by the Sales Field Manager.
+
+
+## Problem Statement
+
+Despite increase in sales over the past three years, reaching 42000 customers across Ghana, there is a high default rate of solar devices. Bad payer behavior has a huge cost for the company. 
+
+# Adidome Service Center in the Volta Region
+
+Portfolio - 198 customers from 2015 - 2017.
+Repayment rate - 36%
+
+Task: An understanding of the External Drivers which could explain such a low repayment rate at Adidome compared to the average repayment rate using data.
+
+What could possibly be the situation here? Could it be that generally socio-economic conditions have plummeted so much that consumers can no longer afford PEG Afica's products or the has become an available alternative from competitors or that the National Grid has connected them online now?
+
+To answer this question I used  the Exploratory Data Analysis methodology combined with literature review on loan repayments in Ghana. Due to the paucity of data on District-level demographics, unavailability of Customer-level information at the Adidome Service Center and only 48 Service Center records given, statistical models investigated did not show any significance.
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = '/Users/marvinlomo/Documents/PEG Africa - Case Study')
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data preparation
+
+```{r}
+# Lets load the required libraries
+library(tidyverse)
+library(readxl)
+library(rpart)
+
+
+
+# Load the data
+repayment_Data <- read_excel("Case 1 Data.xls")
+
+
+# Converting to tibble Data_frame
+repayment_Data <- as_tibble(repayment_Data)
+
+# Lets take a look at the Data
+head(repayment_Data)
+
+
+# Renaming the Repayment Rate column 
+repayment_Data$Repayment_rate <- repayment_Data$`Repayment rate`
+
+repayment_Data <- repayment_Data[ , c(1, 2, 4, 5)]
+
+
+# Converting the region and SC_name to a factor variables
+
+repayment_Data$Region <- as.factor(repayment_Data$Region)
+repayment_Data$Name <- as.factor(repayment_Data$Name)
+
+# Focusing in on Adidome_SC
+adidome_SC_Data <- repayment_Data %>%
+  filter(Region == "Volta South", Name == "Adidome Service Center")
+```
+
+
+## Visualizing the Repayment Data
+
+```{r}
+reg_line <- repayment_Data %>%
+  select("Sales", "Repayment_rate")
+
+
+
+
+# Investigating Sales vs Repayment rate
+repayment_Data %>%
+  ggplot(aes(x = Sales , y = Repayment_rate)) + 
+  geom_point(aes(size =  Repayment_rate, color = Region, alpha = 2), show.legend = FALSE) +
+  geom_smooth(data = reg_line, aes(x = Sales , y = Repayment_rate), 
+              method = lm ,se = FALSE, color = "black", lwd = 2)
+
+# Lets look at the correlation between repayment rate with Sales
+cor(repayment_Data$Sales, repayment_Data$Repayment_rate)
+
+```
+The negative correlation between sales and repayment_rate suggests that Service Centers with high Sales also tend to have a low repayment rate.
+
+
+## Visualizing the Sales per Region
+
+```{r}
+
+# Investigating average repayment rate at centers vs adidome_SC
+repayment_Data %>%
+  ggplot(aes(reorder(x = Region, Repayment_rate), y = Repayment_rate, color = Region)) +
+  geom_boxplot(show.legend = FALSE) +
+  geom_hline(yintercept = mean(repayment_Data$Repayment_rate), lty = 2, lwd = 2, colour = "#333333") +
+  geom_point(data = adidome_SC_Data, aes( x = Region, y = Repayment_rate), 
+             color = "black", size = 5) +
+  labs(x = "Region", y = "Repayment rate") +
+  annotate(geom = "text", label = "Average", x = 1.5, y = 0.7, 
+           colour = "#1380A1", family = "Helvetica", size = 7) +
+  geom_curve(aes(x = 1, y = 0.68, xend = 1, yend = 0.49), colour = "#555555", 
+             size = 0.5, curvature = 0.3, arrow = arrow(length = unit(0.03, "npc"))) +
+  annotate(geom = "text", label = "Adidome", x = 1.5, y = 0.2, 
+           colour = "#1380A1", family = "Helvetica", size = 7) +
+  geom_curve(aes(x = 1, y = 0.22, xend = 2, yend = 0.35), colour = "#555555", 
+             size = 0.5, curvature = 0.3, arrow = arrow(length = unit(0.03, "npc")))
+  
+
+
+# Investigating average Sales at centers vs adidome_SC
+repayment_Data %>%
+  ggplot(aes(reorder(x = Region, Sales), y = Sales, color = Region)) +
+  geom_boxplot(show.legend = FALSE) +
+  geom_hline(yintercept = mean(repayment_Data$Sales), lty = 2, lwd = 2) +
+  geom_point(data = adidome_SC_Data, aes(x = Region, y = Sales), 
+             color = "black", size = 5) +
+  labs(x = "Region", y = "Sales") +
+  annotate(geom = "text", label = "Average", x = 1.5, y = 800, 
+           colour = "#1380A1", family = "Helvetica", size = 7) +
+  geom_curve(aes(x = 1, y = 790, xend = 2, yend = 455), colour = "#555555", 
+             size = 0.5, curvature = 0.3, arrow = arrow(length = unit(0.03, "npc"))) +
+  annotate(geom = "text", label = "Adidome", x = 5.5, y = 200, 
+           colour = "#1380A1", family = "Helvetica", size = 7) +
+  geom_curve(aes(x = 5.5, y = 220, xend = 6, yend = 360), colour = "#555555", 
+             size = 0.5, curvature = 0.3, arrow = arrow(length = unit(0.03, "npc")))
+
+# It can be seen above that the adidome SC is also selling below the average SC Sales.
+
+```
+
+The gap between the Repayment rate at the Adidome Service Center and the Average 
+Service Center repayment rate as seen in the Chart 2 can probably be explained by the 
+demographics of the Adidome Area. Various studies on loan repayments conducted have estimated that external drivers that impact loan repayments include 
+
+1. Age
+2. Education
+3. Gender
+4. Household size
+5. Loan size
+6. Purpose of loan
+7. Savings
+
+
+In the context of the Adidome area, other factors such as whether the individual is connected to the National Grid and Household income can be added to the list of factors that may affect the Repayment rate.
+
+In addition, from a recent report released by the statistical service on Multidimensional Poverty Index of regions, as at 2017, the Volta region along with the three Northern regions were ranked as the poorest regions in the country. This could explain why out of the 10 worst performing Service Centers based on Repayment rate, 5 of the 10 are from the Volta Region.
+
+```{r}
+sc_ranked <- repayment_Data %>%
+  arrange(Repayment_rate)
+
+head(sc_ranked, 10)
+```
+
+Given the above, the following Hypothesis can be constructed: 
+
+1. Null Hypothesis: The above factors do not affect Repayment rate.
+2. Alternative Hypothesis: The above factors affect Repayment rate.
+
+Further data collected from customers, and modeling perfomed to understand the factors influencing customer payment behavior.
+
+Should I be given the opportunity to join PEG Africa, I would love to continue to 
+investigate this negative customer behavior, predict credit score based on payment
+frequency to reduce the incidence of non-payment of loans.
+
+
+
+# Case Study 2: PEG Africa - Repayment
+
+## Scenario 1: 
+Given the DB write a SQL Query to get the amount paid by each customer, 
+create a new column called "Total Amount Paid" and use this amount to create a column
+called outstanding balance in which I will add the customer's outstanding balance after 
+calculating "Total Amount Paid".
+
+```{r}
+
+# Question 1
+
+# Loading the Dataset
+db_1 <- read_excel(path = "Case 2 Data.xlsx", sheet = 1)
+
+
+# Verifying Head Data
+head(db_1)
+
+# Converting Amount and Product_Price to Numeric
+db_1$Amount <- as.numeric(db_1$Amount)
+db_1$ProductPrice <- as.numeric(db_1$ProductPrice)
+
+
+# Total Amount Paid by the Customer
+
+total_amount_paid_by_Customer <- db_1 %>%
+  group_by(CustomerId, ContractId, ProductPrice) %>%
+  summarise(total_Payment = sum(Amount))
+
+# Preview the result of the Query
+head(total_amount_paid_by_Customer, 10)
+
+# Clients with More than one Contract
+customer_with_more_than_one_Contract <- total_amount_paid_by_Customer %>%
+  # Filter by the customerID
+  group_by(CustomerId) %>%
+  # Count the number of times each Customer ID occurs
+  summarise(freq = n()) %>%
+  # Show Customers with more than one contract
+  filter( freq > 1)
+
+# Preview list of Customers with more than one Contract
+head(customer_with_more_than_one_Contract, 10)
+
+
+# Adding the Outstanding Balances
+
+customer_Outstanding_Balance <- total_amount_paid_by_Customer %>%
+  mutate(outstanding_Balance = ProductPrice  - total_Payment)
+
+head(customer_Outstanding_Balance, 10)
+
+```
+
+Please Note that the Case Study was not clear on what happens to the Deposit of the Customer. The Query above totals all Amounts paid by the customer for each contract he/she holds without the Customer Down Payment.
+
+If Customer Downpayment is added to amounts paid, the resulting Query is:
+
+```{r}
+
+# Now, Computing Total Amount Paid with Deposit inclusive
+
+# Loading the Dataset
+db_1 <- read_excel(path = "Case 2 Data.xlsx", sheet = 1)
+
+
+# Verifying Head Data
+head(db_1)
+
+# Converting Amount and Product_Price to Numeric
+db_1$Amount <- as.numeric(db_1$Amount)
+db_1$ProductPrice <- as.numeric(db_1$ProductPrice)
+db_1$Deposit <- as.numeric(db_1$Deposit)
+
+total_amount_paid_by_Customer_with_Deposit <- db_1 %>%
+  group_by(CustomerId, ContractId, ProductPrice, Deposit) %>%
+  summarise(total_Payment = sum(Amount)) 
+
+
+# Preview of Field
+head(total_amount_paid_by_Customer_with_Deposit, 10)
+
+
+# total_amount_paid_plus_Deposit = Deposit + Total_Paid_Amount
+total_amount_paid_by_Customer_Plus_Deposit <- 
+  total_amount_paid_by_Customer_with_Deposit %>%
+  mutate(total_amount_paid_plus_Deposit = Deposit + total_Payment)
+
+
+# Preview 
+head(total_amount_paid_by_Customer_Plus_Deposit, 10)
+
+
+# Outstanding Payments = Product_Price - (Total_Amount_Paid + Deposit) 
+
+customer_Outstanding_Balance_after_Deposit_and_Tot_Payt <- total_amount_paid_by_Customer_Plus_Deposit %>%
+  mutate(Outstanding_Balance_after_Deposit_and_Tot_Payt = ProductPrice - total_amount_paid_plus_Deposit)
+
+
+# Preview
+head(customer_Outstanding_Balance_after_Deposit_and_Tot_Payt[ , -3], 10)
+```
+
+
+
+## Scenario 2:
+
+Write a query to get the sum_paid_to_date and arrears of each contractID at their
+maximum date of activity.
+
+```{r}
+# Load the DB
+db_2 <- read_excel(path = "Case 2 Data.xlsx", sheet = 2)
+
+
+# Lets look at the Data
+
+head(db_2)
+
+
+# Getting the sum_paid_to_date and arrears at maximum date of activity
+
+sum_Paid_to_Date <- db_2 %>%
+  # Grouping by CustomerID and ContractID
+  group_by(customerid, contractid) %>%
+  # Filtering the Group by maximum activity date
+  filter(date_of_activity == max(date_of_activity)) %>%  
+  arrange(contractid)
+
+
+head(sum_Paid_to_Date[ , -c(3)], 10)
+
+```
+  
+
+# Case Study 3:
+
+## Scenario: Demonstrating Business Understanding
+
+For this section, I will break the corresponding KPI metrics into the following:
+
+1. Overall: Total_Sales_by_Country, Product_Performance_per_country, Active_vs_Blocked_Customers_per_Country
+
+2. Sales: Active_Contracts_per_SC, Blocked_Contracts_per_SC, Best_Performing_Products, Product_Sales_per_Country
+
+3. Credit Management: Customer_performance_to_Date, Expected_DailyReceivable_vs_ActualReceived.
+
+4. Finance: Expected_Accounts_Receivable_vs_Actual_Accounts_Receivable, ActualDaily_Deposits_vs_Target, Cash-to-Cash-Cycle.
+
+
+## Group Level Data Analysis
+
+Firstly, lets see which country is performing better:
+```{r}
+# Loading the dataset
+db_3 <- read_excel("Case 3-Sample data.xlsx")
+
+# Preview the data
+head(db_3)
+
+# Converting CustomerStatus to numeric
+db_3$customerStatus <- ifelse(db_3$customerStatus == "Blocked", 0, 1)
+
+# Converting Sum_Paid_to_Numeric
+db_3$Sum_Paid_To_Date <- as.numeric(db_3$Sum_Paid_To_Date)
+
+
+db_3 %>%
+  group_by(CountryId) %>%
+  summarise(Tot_Amt_Received_to_Date_loc_Curr = sum(Sum_Paid_To_Date)) %>%
+  arrange(desc(Tot_Amt_Received_to_Date_loc_Curr))
+```
+
+Looks like PEG Africa's Senegal Office is doing something right! 
+
+
+Next, we find out which Product is selling the most:
+
+```{r}
+db_3 %>%
+  group_by(productTypeGeneral) %>%
+  summarise(sum_paid_per_product = sum(Sum_Paid_To_Date)) %>%
+  arrange(desc(sum_paid_per_product))
+```
+
+Now, how many Customers does each country have? Lets find out:
+
+```{r}
+db_3 %>%
+  group_by(CountryId) %>%
+  summarise(No_of_Customers = n())
+```
+
+
+Finally, lets find out the number of Active customers per group
+```{r}
+db_3 %>% 
+  filter(customerStatus == 1) %>%
+  group_by(CountryId) %>%
+  summarise(Number_of_Active_Cust = sum(customerStatus))
+```
+It gets interesting as all customers in region CDI are blocked. What could be the
+reason for this? Also, Senegal has more active clients than the Ghana office. Lets deep-dive into Senegal to find out what is hapenning in there.
+
+## A Dive into Senegal
+
+The best performing region is Senegal is: "SC Gandiaye":
+```{r}
+# Senegal Data
+db_3 %>%
+  filter(CountryId == "SN", customerStatus == 1) %>%
+  group_by(`Sales location`) %>%
+  summarise(Earnings_to_Date = sum(Sum_Paid_To_Date)) %>%
+  arrange(desc(Earnings_to_Date))
+```
+
+Is there a repayment problem? Lets find this out in Senegal:
+```{r}
+# Repayment in Senegal
+db_3 %>%
+  filter(CountryId == "SN") %>%
+  group_by(`Sales location`) %>%
+  summarise(Repayment_rate_Perc = (mean(customerStatus) * 100)) %>%
+  arrange(desc(Repayment_rate_Perc))
+```
+
+Surprisingly, there is no repayment problem in Senegal. I suggest that, management
+at the group-level investigate strategies being implemented in Senegal's provinces
+and repeat same at the other locations.
+
+What product sells most in Senegal?
+```{r}
+# Best performing Products  in Senegal
+db_3 %>%
+  filter(CountryId == "SN") %>%
+  group_by(productTypeGeneral) %>%
+  summarise(Sales_by_Product = n()) %>%
+  arrange(desc(Sales_by_Product))
+```
+
+
+## A look at Ghana
+
+Lets take a look at the best performing Service Center in Ghana. Looks like Bogoso
+leads the pack!
+```{r}
+db_3 %>%
+  filter(CountryId == "GH", customerStatus == 1) %>%
+  group_by(`Sales location`) %>%
+  summarise(Earnings_to_Date = sum(Sum_Paid_To_Date)) %>%
+  arrange(desc(Earnings_to_Date)) %>%
+  head(10)
+```
+
+A look at the percentage of Active clients against total number of clients at the
+service center (as a measure of repayment since defaulting customers are "blocked") reveals a staggering problem.
+
+```{r}
+# Repayment in Ghana
+db_3 %>%
+  filter(CountryId == "GH") %>%
+  group_by(`Sales location`) %>%
+  summarise(Repayment_rate_Perc = (mean(customerStatus) * 100)) %>%
+  arrange(Repayment_rate_Perc) %>%
+  head(10)
+```
+
+Ghanaian customers have a high default rate and are blocked due to non-repayment of loans. This is a revealing problem I have attempted to answer in case study 1.
+Demographic data is needed on these customers to understand the attitude of the Ghanaian PEG-Africa customer.
+
+What products sell most in Ghana?
+
+```{r}
+# Best performing Products  in Ghana
+db_3 %>%
+  filter(CountryId == "GH") %>%
+  group_by(productTypeGeneral) %>%
+  summarise(Sales_by_Product = n()) %>%
+  arrange(desc(Sales_by_Product))
+```
+
+
+## Sample Visualization
+```{r}
+library(tidyverse)
+library(bbplot)
+require(scales)
+
+db_3 %>%
+  group_by(CountryId) %>%
+  summarise(Tot_Amt_Received_to_Date_loc_Curr = sum(Sum_Paid_To_Date)) %>%
+  arrange(desc(Tot_Amt_Received_to_Date_loc_Curr)) %>%
+  ggplot(aes(reorder(x = CountryId, Tot_Amt_Received_to_Date_loc_Curr), y = Tot_Amt_Received_to_Date_loc_Curr, fill = CountryId)) +
+  geom_col() +
+  scale_y_continuous(labels = comma)+
+  labs(title = "Earnings by Country",
+       subtitle = "Country's Sales Performance", 
+       x = "Earnings", y = "Country") + 
+  bbc_style()
+```
+
+```{r}
+
+db_3 %>%
+  group_by(productTypeGeneral) %>%
+  summarise(sum_paid_per_product = sum(Sum_Paid_To_Date)) %>%
+  arrange(desc(sum_paid_per_product)) %>%
+  ggplot(aes(reorder(x = productTypeGeneral, sum_paid_per_product), 
+             y = sum_paid_per_product, fill = productTypeGeneral)) +
+  geom_col() +
+  scale_y_continuous(labels = comma) +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title = "Performance of Product types", 
+       subtitle = "Which product do customers prefer", x = "Product", 
+       y = "Earnings by product") +
+  bbc_style()
+```
+
+
+```{r}
+
+db_3 %>%
+  group_by(CountryId) %>%
+  summarise(No_of_Customers = n()) %>%
+  ggplot(aes(x = CountryId, y = No_of_Customers, fill = CountryId)) +
+  geom_col() +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title = "Number of Customers", subtitle = "How many Customers does your country have?", 
+       x = "Country", y = "Number of Customer") +
+  bbc_style()
+```
+
+```{r}
+db_3 %>% 
+  filter(customerStatus == 1) %>%
+  group_by(CountryId) %>%
+  summarise(Number_of_Active_Cust = sum(customerStatus)) %>%
+  ggplot(aes(x = CountryId, y = Number_of_Active_Cust, fill = CountryId)) +
+  geom_col() +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title = "Number of Active Customers", subtitle = "How many Active Customers\n does your country have?", 
+       x = "Country", y = "Number of Customer") +
+  bbc_style()
+```
+
+
+
+
+
+
+
